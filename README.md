@@ -107,8 +107,19 @@ mvn test
 See `TESTING.md` for the manual checklist.
 
 ## Screenshots
-Add your own after running the app:
-`docs/screenshots/dashboard.png`, `board.png`, `issue-details.png`, `analytics.png`
+
+### Dashboard
+![DevFlow Dashboard](docs/screenshots/dashboard.png)
+
+### All Issues
+![DevFlow All Issues](docs/screenshots/allissues.png)
+
+### Projects
+![DevFlow Projects](docs/screenshots/projects.png)
+
+### My Issues
+![DevFlow My Issues](docs/screenshots/Myissues.png)
+
 
 ## Project structure
 ```
