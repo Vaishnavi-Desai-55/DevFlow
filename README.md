@@ -27,10 +27,15 @@ Java 17, Jakarta Servlet 6 / JSP 3.1 (Tomcat 10.1), JSTL, JDBC (`PreparedStateme
 
 ## Architecture
 
-```
-Browser -> Filters (AuthFilter, CsrfFilter) -> Servlet (controller) -> Service (rules, transactions) -> DAO (SQL) -> MySQL
-                                                     |
-                                                     +-> JSP view (WEB-INF/views, output escaped with c:out)
+```mermaid
+flowchart LR
+    B["Browser"] --> F["Filters<br/>AuthFilter, CsrfFilter"]
+    F --> C["Servlets<br/>(controllers)"]
+    C --> S["Services<br/>rules, permissions, transactions"]
+    S --> D["DAOs<br/>PreparedStatement SQL"]
+    D --> DB[("MySQL 8")]
+    C --> V["JSP views<br/>WEB-INF/views, c:out escaping"]
+    V --> B
 ```
 
 * **controller/** reads the request, calls a service, picks a view. No SQL, no rules.
@@ -51,15 +56,135 @@ Why it is built this way, in one line each:
 
 `database/schema.sql` creates `devflow_db` (InnoDB, keys, unique constraints, indexes):
 
-```
-users ──< project_members >── projects ──< issues ──< comments
-                                 │            ├──< issue_history   (audit log)
-                                 │            ├──< issue_links     (blocks / blocked by)
-                                 │            └── parent_issue_id  (subtasks)
-                                 └──< workflows ──< workflow_transitions
+```mermaid
+erDiagram
+    USERS ||--o{ PROJECT_MEMBERS : "joins"
+    PROJECTS ||--o{ PROJECT_MEMBERS : "has"
+    USERS ||--o{ PROJECTS : "creates"
+    PROJECTS ||--o{ ISSUES : "contains"
+    USERS ||--o{ ISSUES : "reports"
+    USERS ||--o{ ISSUES : "assigned to"
+    ISSUES ||--o{ ISSUES : "parent of (subtasks)"
+    ISSUES ||--o{ ISSUE_LINKS : "blocker"
+    ISSUES ||--o{ ISSUE_LINKS : "blocked"
+    ISSUES ||--o{ COMMENTS : "has"
+    USERS ||--o{ COMMENTS : "writes"
+    ISSUES ||--o{ ISSUE_HISTORY : "audited by"
+    USERS ||--o{ ISSUE_HISTORY : "performs"
+    PROJECTS ||--o{ WORKFLOWS : "defines"
+    WORKFLOWS ||--o{ WORKFLOW_TRANSITIONS : "allows"
+
+    USERS {
+        int id PK
+        string full_name
+        string email UK
+        string password_hash
+        string role
+        timestamp created_at
+    }
+    PROJECTS {
+        int id PK
+        string name
+        string project_key UK
+        string status
+        int next_issue_number
+        int created_by FK
+    }
+    PROJECT_MEMBERS {
+        int id PK
+        int project_id FK
+        int user_id FK
+        string project_role
+    }
+    ISSUES {
+        int id PK
+        int project_id FK
+        int issue_number
+        string issue_key UK
+        string title
+        string issue_type
+        string priority
+        string status
+        int reporter_id FK
+        int assignee_id FK
+        int parent_issue_id FK
+        date due_date
+    }
+    ISSUE_LINKS {
+        int id PK
+        int blocker_id FK
+        int blocked_id FK
+    }
+    COMMENTS {
+        int id PK
+        int issue_id FK
+        int user_id FK
+        text comment_text
+    }
+    ISSUE_HISTORY {
+        int id PK
+        int issue_id FK
+        int user_id FK
+        string action_type
+        string field_name
+        text old_value
+        text new_value
+    }
+    WORKFLOWS {
+        int id PK
+        int project_id FK
+        string workflow_name
+    }
+    WORKFLOW_TRANSITIONS {
+        int id PK
+        int workflow_id FK
+        string from_status
+        string to_status
+    }
 ```
 
 Two small additions to the brief: `projects.next_issue_number` (the key counter) and `issue_links` (for the "blocks another issue" rule).
+
+### Workflow (status transitions)
+
+Only these moves are allowed. Anything else is rejected by `WorkflowService` with a message such as "Cannot move issue from OPEN directly to DONE."
+
+```mermaid
+stateDiagram-v2
+    [*] --> OPEN
+    OPEN --> IN_PROGRESS
+    IN_PROGRESS --> IN_REVIEW
+    IN_REVIEW --> IN_PROGRESS
+    IN_REVIEW --> TESTING
+    TESTING --> IN_PROGRESS
+    TESTING --> DONE
+    DONE --> OPEN : reopen
+```
+
+### What happens when you drag a card on the Kanban board
+
+```mermaid
+sequenceDiagram
+    actor U as Developer
+    participant J as board.js
+    participant W as WorkflowServlet
+    participant S as WorkflowService
+    participant DB as MySQL
+    U->>J: Drag card to another column
+    J->>W: POST /workflow/transition with CSRF token
+    W->>S: transition(user, issueId, toStatus)
+    S->>DB: BEGIN and lock the issue row
+    S->>S: Check role and allowed transition
+    alt Move allowed
+        S->>DB: UPDATE status, INSERT audit row, COMMIT
+        W-->>J: 200 OK
+        J-->>U: Card moves and a success toast appears
+    else Move not allowed
+        S->>DB: ROLLBACK
+        W-->>J: 409 with the reason
+        J-->>U: Card stays and an error toast appears
+    end
+```
 
 ## Getting started
 
