@@ -1,0 +1,46 @@
+<%-- Shared layout (top). The including page sets pageTitle and nav first, and declares the c / fmt / fn taglibs. --%>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="${csrfToken}">
+  <title><c:out value="${pageTitle}"/> · DevFlow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="${ctx}/assets/css/style.css">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <a class="brand" href="${ctx}/dashboard">Dev<span>Flow</span></a>
+    <nav>
+      <a class="${nav == 'dashboard' ? 'active' : ''}" href="${ctx}/dashboard"><span class="nav-icon">▦</span>Dashboard</a>
+      <a class="${nav == 'projects' ? 'active' : ''}" href="${ctx}/projects"><span class="nav-icon">◫</span>Projects</a>
+      <a class="${nav == 'issues' ? 'active' : ''}" href="${ctx}/issues"><span class="nav-icon">☰</span>All issues</a>
+      <a class="${nav == 'mine' ? 'active' : ''}" href="${ctx}/issues?mine=1"><span class="nav-icon">★</span>My issues</a>
+      <a class="${nav == 'profile' ? 'active' : ''}" href="${ctx}/profile"><span class="nav-icon">☺</span>Profile</a>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="me">
+        <span class="avatar"><c:out value="${sessionScope.user.initials}"/></span>
+        <div><c:out value="${sessionScope.user.fullName}"/><small><c:out value="${roleLabels[sessionScope.user.role]}"/></small></div>
+      </div>
+      <form method="post" action="${ctx}/logout">
+        <input type="hidden" name="_csrf" value="${csrfToken}">
+        <button class="btn btn-ghost btn-sm btn-block" type="submit">Sign out</button>
+      </form>
+    </div>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <button class="menu-btn" id="menuToggle" type="button" aria-label="Open menu">☰</button>
+      <form method="get" action="${ctx}/issues">
+        <input type="search" name="q" placeholder="Search issues by key, title or description" value="<c:out value='${param.q}'/>">
+      </form>
+      <span class="spacer"></span>
+      <a class="btn btn-sm" href="${ctx}/issues/new">+ New issue</a>
+    </header>
+    <main class="content">
+      <c:if test="${not empty flash}"><div class="flash flash-${flashType}" role="alert"><c:out value="${flash}"/></div></c:if>
